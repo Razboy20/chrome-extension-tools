@@ -87,10 +87,18 @@ export const pluginHMR: CrxPluginFn = () => {
         const { root } = server.config
 
         const relFiles = new Set<string>()
-        for (const m of modules)
+
+        function getRelFile(file: string) {
+          return file.startsWith(root)
+            ? file.slice(server.config.root.length)
+            : file
+        }
+
+        for (const m of modules) {
           if (m.id?.startsWith(root)) {
             relFiles.add(m.id.slice(server.config.root.length))
           }
+        }
 
         // check if changed file is a background dependency
         if (inputManifestFiles.background.length) {
@@ -112,7 +120,18 @@ export const pluginHMR: CrxPluginFn = () => {
               relFiles.has(script.id) ||
               modules.some(isImporter(join(server.config.root, script.id)))
             ) {
-              relFiles.forEach((relFile) => update(relFile))
+              modules
+                .filter((mod) => mod.id?.startsWith(root))
+                .forEach((mod) => {
+                  update(getRelFile(mod.id!))
+                  // also update any files that import the changed file (for asset files)
+                  if (mod.file?.endsWith('.scss')) {
+                    mod.importers.forEach((imp) => {
+                      console.log('updated imported file', getRelFile(imp.id!))
+                      update(getRelFile(imp.id!))
+                    })
+                  }
+                })
             }
           }
       },

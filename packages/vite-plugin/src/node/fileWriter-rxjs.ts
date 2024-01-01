@@ -181,21 +181,53 @@ function prepScript(
       }),
       mergeMap(async ({ target, code, deps }) => {
         await lexer.init
-        const [imports] = lexer.parse(code, fileName)
+        const [imports, exports] = lexer.parse(code, fileName)
         const depSet = new Set<string>(deps)
         const magic = new MagicString(code)
-        for (const i of imports)
+        for (const i of imports) {
           if (i.n) {
             depSet.add(i.n)
             const fileName = getFileName({ type: 'module', id: i.n })
 
             // NOTE: Temporary fix for this bug: https://github.com/guybedford/es-module-lexer/issues/144
             const fullImport = code.substring(i.s, i.e)
-            magic.overwrite(i.s, i.e, fullImport.replace(i.n, `/${fileName}`))
+            const hmrTimestamp = fullImport.match(/\bt=\d{13}&?\b/)
+            magic.overwrite(
+              i.s,
+              i.e,
+              fullImport.replace(
+                i.n,
+                `/${fileName}${hmrTimestamp ? `?${hmrTimestamp[0]}` : ''}`,
+              ),
+            )
 
             // NOTE: use this once the bug is fixed
             // magic.overwrite(i.s, i.e, `/${fileName}`)
           }
+        }
+        for (const e of exports) {
+          // rewrite "export default 'module'" to use the output file name
+          // issue is, es-module-lexer currently doesn't support giving reexported identifiers, so temporary fix:
+          if (e.n === 'default') {
+            // check that the export is a string
+            const regex = /\s+['"](.*)['"]/y
+            regex.lastIndex = e.e
+            const fullExport = regex.exec(code)?.[1]
+            if (!fullExport) continue
+            // start = where the group starts
+            // end = where the group ends
+            const start = regex.lastIndex - fullExport.length - 1
+            const end = regex.lastIndex - 1
+
+            if (fullExport.startsWith('/node_modules')) {
+              magic.overwrite(
+                start,
+                end,
+                getFileName({ type: 'module', id: fullExport }),
+              )
+            }
+          }
+        }
         return { target, source: magic.toString(), deps: [...depSet] }
       }),
     )

@@ -70,7 +70,7 @@
     "connect-injector": "^0.4.4",
     "convert-source-map": "^1.7.0",
     "debug": "^4.3.3",
-    "es-module-lexer": "^0.10.0",
+    "es-module-lexer": "^1.4.1",
     "fast-glob": "^3.2.11",
     "fs-extra": "^10.0.1",
     "jsesc": "^3.0.2",
